@@ -1,0 +1,9 @@
+*.img
+*.elf
+*.bin
+*.o
+notes.txt
+*.ini
+*.log
+mnt
+.vscode
