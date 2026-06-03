@@ -1,9 +1,10 @@
 #ifndef BOOTLOADER_H
 #define BOOTLOADER_H
 
-typedef unsigned char uint8_t;
-typedef unsigned short uint16_t;
+typedef unsigned long long uint64_t;
 typedef unsigned int uint32_t;
+typedef unsigned short uint16_t;
+typedef unsigned char uint8_t;
 
 #define MAGIC 0xB16B00B5
 
@@ -20,6 +21,13 @@ enum FS {
     FS_EXT3,
     FS_EXT4
 };
+
+typedef struct {
+    uint64_t base_addr;
+    uint64_t length;
+    uint32_t type;
+    uint32_t acpi_ext;
+} __attribute__((packed)) e820_entry_t;
 
 struct drive_info {
     uint8_t drive;
@@ -44,11 +52,17 @@ struct elf_info {
     uint32_t kernel_size;
 };
 
+struct mmap {
+    e820_entry_t* mmap;
+    uint32_t mmap_count;
+};
+
 struct bootinfo {
     uint32_t magic;
     struct drive_info boot_drive;
     struct videoInfo video;
     struct elf_info elf;
+    struct mmap mmap;
 };
 
 #endif

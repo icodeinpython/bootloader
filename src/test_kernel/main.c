@@ -1,4 +1,4 @@
-#include <bootloader.h>
+#include "bootloader.h"
 
 struct bootinfo* boot_info;
 
@@ -15,5 +15,8 @@ void cmain(struct bootinfo* __boot_info) {
     __asm__ ("xchg %bx, %bx");
     boot_info = __boot_info;
     clearScreen();
+    for (int i = 0; i < 100; i++) {
+        boot_info->video.framebuffer[i*(boot_info->video.pitch/4+1)] = 0x00FF0000; // Red
+    }
     while (1);
 }

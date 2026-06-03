@@ -1,20 +1,11 @@
 
+default: disk.img
 
-
-disk.img: bootsect stage2 test_kernel
-	dd if=/dev/zero of=disk.img bs=512 count=102400
-	dd if=src/bootsect/bootsect.bin of=disk.img bs=512 seek=0 conv=notrunc
-	dd if=src/stage2/stage2.bin of=disk.img bs=512 seek=2 conv=notrunc
-	sudo losetup -D
-	sudo losetup -fP disk.img
-	sudo mkfs.vfat -F 16 /dev/loop0p1
-	sudo mount /dev/loop0p1 mnt
-	sudo cp -r src/test_kernel/kernel.elf mnt/
-	sudo umount mnt
-	sudo losetup -D
-
-test_kernel:
+disk.img: bootsect stage2 kernel.elf
+	bash makeDisk.sh
+kernel.elf:
 	$(MAKE) -C src/test_kernel
+	cp src/test_kernel/kernel.elf kernel.elf
 
 bootsect:
 	$(MAKE) -C src/bootsect
