@@ -1,4 +1,4 @@
-
+.PHONY: all clean qemu bochs kernel.elf bootsect stage2
 default: disk.img
 
 disk.img: bootsect stage2 kernel.elf
@@ -22,4 +22,5 @@ stage2:
 clean:
 	$(MAKE) -C src/stage2 clean
 	$(MAKE) -C src/bootsect clean
-	rm -f disk.img
+	$(MAKE) -C src/test_kernel clean
+	rm -f disk.img kernel.elf

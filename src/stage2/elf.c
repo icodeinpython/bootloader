@@ -10,43 +10,44 @@ uint32_t mmap_count;
 // ---------------- ELF HEADER STRUCTS ----------------
 
 typedef struct {
-    unsigned char e_ident[EI_NIDENT];
-    uint16_t e_type;
-    uint16_t e_machine;
-    uint32_t e_version;
-    uint32_t e_entry;     // Entry point
-    uint32_t e_phoff;     // Program header table offset
-    uint32_t e_shoff;
-    uint32_t e_flags;
-    uint16_t e_ehsize;
-    uint16_t e_phentsize;
-    uint16_t e_phnum;     // Number of program headers
-    uint16_t e_shentsize;
-    uint16_t e_shnum;
-    uint16_t e_shstrndx;
-} Elf32_Ehdr;
+  unsigned char e_ident[EI_NIDENT]; 
+  uint16_t     e_type;         
+  uint16_t     e_machine;      
+  uint32_t     e_version;      
+  uint64_t     e_entry;        
+  uint64_t      e_phoff;        
+  uint64_t      e_shoff;        
+  uint32_t     e_flags;        
+  uint16_t     e_ehsize;       
+  uint16_t     e_phentsize;    
+  uint16_t     e_phnum;        
+  uint16_t     e_shentsize;    
+  uint16_t     e_shnum;        
+  uint16_t     e_shstrndx;     
+} Elf64_Ehdr;
 
-typedef struct {
-    uint32_t p_type;   // Segment type
-    uint32_t p_offset; // Offset in file
-    uint32_t p_vaddr;  // Virtual address in memory
-    uint32_t p_paddr;
-    uint32_t p_filesz; // Bytes in file
-    uint32_t p_memsz;  // Bytes in memory (zero padded)
-    uint32_t p_flags;
-    uint32_t p_align;
-} Elf32_Phdr;
+typedef struct
+{
+  uint32_t    p_type;         
+  uint32_t    p_flags;        
+  uint64_t     p_offset;       
+  uint64_t    p_vaddr;        
+  uint64_t    p_paddr;        
+  uint64_t   p_filesz;       
+  uint64_t   p_memsz;        
+  uint64_t   p_align;        
+} Elf64_Phdr;
 
 // ---------------- ELF LOADER ----------------
 
 
-uint32_t load_elf32_from_buffer(const uint8_t *elf, uint32_t elf_size) {
+uint32_t load_elf64_from_buffer(const uint8_t *elf, uint32_t elf_size) {
     uint32_t begin = 0xFFFFFFFF;
-    if (elf_size < sizeof(Elf32_Ehdr)) {
+    if (elf_size < sizeof(Elf64_Ehdr)) {
         return -1; // Too small to be ELF
     }
 
-    const Elf32_Ehdr *hdr = (const Elf32_Ehdr *)elf;
+    const Elf64_Ehdr *hdr = (const Elf64_Ehdr *)elf;
 
     // Check ELF magic
     if (hdr->e_ident[0] != 0x7F || hdr->e_ident[1] != 'E' ||
@@ -54,20 +55,21 @@ uint32_t load_elf32_from_buffer(const uint8_t *elf, uint32_t elf_size) {
         return -2; // Invalid ELF
     }
 
-    // Only support ELF32 executable
+    // Only support ELF64 executable
     if (hdr->e_type != 2) { // ET_EXEC
         return -3;
     }
 
     // Load the program headers
-    const Elf32_Phdr *ph = (const Elf32_Phdr *)(elf + hdr->e_phoff);
+    const Elf64_Phdr *ph = (const Elf64_Phdr *)(elf + hdr->e_phoff);
+    printf("ELF has %d program headers\n", hdr->e_phnum);
 
     for (int i = 0; i < hdr->e_phnum; i++) {
         if (ph[i].p_type != PT_LOAD)
             continue;
 
-        uint8_t *dest = (uint8_t *)ph[i].p_vaddr;
-        const uint8_t *src = elf + ph[i].p_offset;
+        uint8_t *dest = (uint8_t *)(uint32_t)ph[i].p_vaddr;
+        const uint8_t *src = (uint8_t*)((uint32_t)elf + (uint32_t)ph[i].p_offset);
         if ((uint32_t)dest < begin) {
             begin = (uint32_t)dest;
         }
@@ -75,15 +77,15 @@ uint32_t load_elf32_from_buffer(const uint8_t *elf, uint32_t elf_size) {
         // Copy from file to proper memory addr
         memcpy(dest, src, ph[i].p_filesz);
 
-        printf("Loaded %d bytes from %x to %x\n", ph[i].p_filesz, src, dest);
+        printf("Loaded %d bytes from 0x%x to 0x%x\n", ph[i].p_filesz, src, dest);
 
-        // Zero out BSS
+        // Zero out extra memory if memsz > filesz
         memset(dest + ph[i].p_filesz, 0, ph[i].p_memsz - ph[i].p_filesz);
     }
 
-    printf("Entry point: %x\n", hdr->e_entry);
 
-    bochs_breakpoint();
+    printf("Entry point: 0x%x\n", (uint32_t)hdr->e_entry); // gets ored with 0xFFFFFFFF in kernel_jmp.S to set the high bit for long mode kernel address space
+
 
     boot_info->magic = MAGIC;
 
@@ -112,7 +114,10 @@ uint32_t load_elf32_from_buffer(const uint8_t *elf, uint32_t elf_size) {
     boot_info->mmap.mmap_count = mmap_count;
 
     // Jump to entry point
-    entry_func_t entry = (entry_func_t)(hdr->e_entry);
+    entry_func_t entry = (entry_func_t)((uint32_t)hdr->e_entry);
+
+    clearScreen();
+
 
     kernel_jmp(entry);
 

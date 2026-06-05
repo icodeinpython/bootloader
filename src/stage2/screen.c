@@ -86,3 +86,9 @@ void __puts(const char* str) {
         __putchar(*str++);
     }
 }
+
+void clearScreen() {
+    memset(video_info->framebuffer, 0, video_info->pitch * video_info->height);
+    cursor_x = 0;
+    cursor_y = 0;
+}

@@ -1,7 +1,7 @@
-CC = i686-elf-gcc
-CFLAGS = -m32 -ffreestanding -nostdlib -fno-stack-protector -Wall -Wextra -pedantic -Werror -I include -Oz -Wno-unused -I.
+CC = x86_64-elf-gcc
+CFLAGS = -ffreestanding -nostdlib -fno-stack-protector -Wall -Wextra -pedantic -Werror -I include -O2 -Wno-unused -I.
 	
-LDFLAGS = -m32 -ffreestanding -nostdlib -fno-stack-protector -Wl,--build-id=none -Wl,--gc-sections -T linker.ld
+LDFLAGS = -m64 -ffreestanding -nostdlib -fno-stack-protector -Wl,--build-id=none -Wl,--gc-sections -T linker.ld
 
 C_SRC = $(wildcard *.c)
 ASM_SRC = $(wildcard *.S)
@@ -19,3 +19,4 @@ kernel.elf: $(OBJ) linker.ld
 clean:
 	find -name '*.o' -delete
 	find -name '*.bin' -delete
+	rm -f kernel.elf

@@ -1,4 +1,3 @@
-OUTPUT_ARCH(i386)
 ENTRY(_start)
 
 SECTIONS
@@ -8,6 +7,9 @@ SECTIONS
     .text : {
         /* ensure an 'entry' symbol in .text will be used as entry */
         *(.text*)
+    }
+
+    .rodata : {
         *(.rodata*)
     }
 
@@ -20,5 +22,10 @@ SECTIONS
         *(.bss*)
         *(COMMON)
         __bss_end = .;
+    }
+
+    /DISCARD/ : {
+        *(.comment*)
+        *(.note*)
     }
 }

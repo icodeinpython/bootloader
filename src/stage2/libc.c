@@ -19,7 +19,5 @@ int memcmp(const void *s1, const void *s2, uint32_t n) {
 }
 
 void* memset(void *dst, int c, uint32_t len) {
-    uint8_t *d = (uint8_t*)dst;
-    for (uint32_t i=0;i<len;i++) d[i] = c;
-    return dst;
+    return __builtin_memset(dst, c, len);
 }

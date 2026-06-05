@@ -28,10 +28,11 @@ __attribute__((noreturn)) void cmain(void) {
         hcf();
     }
         
-    fat_read_file(&file, (void*)0x10000, file.size);
+    fat_read_file(&file, (void*)0x10000, file.size); // load to 64KiB
+
     
     bochs_breakpoint();
-    load_elf32_from_buffer((uint8_t*)0x10000, file.size);
+    load_elf64_from_buffer((uint8_t*)0x10000, file.size); // load the kernel from the buffer at 64KiB
 
 
     hcf();

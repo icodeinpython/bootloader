@@ -8,7 +8,7 @@ _start:
     mov ss, ax
     mov sp, 0x7c00
     .copyLower:
-        mov cx, 0x0100
+        mov cx, 0x0200
         mov si, 0x7C00
         mov di, 0x600
         rep movsw

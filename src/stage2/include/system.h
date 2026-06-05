@@ -39,6 +39,7 @@ void initScreen();
 void __putchar(unsigned char c);
 void __puts(const char* str);
 int printf(const char* fmt, ...);
+void clearScreen();
 
 typedef __builtin_va_list va_list;
 
@@ -86,7 +87,7 @@ extern FAT_info fat;
 
 typedef void (*entry_func_t)(void);
 
-uint32_t load_elf32_from_buffer(const uint8_t *buffer, uint32_t size);
+uint32_t load_elf64_from_buffer(const uint8_t *buffer, uint32_t size);
 extern void kernel_jmp(entry_func_t addr);
 
 extern struct bootinfo* boot_info;
