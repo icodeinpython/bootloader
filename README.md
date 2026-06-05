@@ -57,3 +57,10 @@ struct elf_info {
 | 1-2 | Bootsector |
 | 2 - 63 | Unallocated (Raw binary) |
 | 63 - ??? | Fat 16 with KERNEL.ELF in root dir
+
+## Register state
+| Register | What's there |
+| ----- | -- |
+| rax | boot_info->magic |
+| rbx | pointer to boot_info |
+| rcx | current instruction pointer |

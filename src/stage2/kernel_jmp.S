@@ -156,6 +156,7 @@ long_mode_trampoline:
     mov %dx, %gs
     mov %dx, %ss
 
+    movl %eax, %eax
     movl %ebx, %ebx
     movl %ecx, %ecx
 
