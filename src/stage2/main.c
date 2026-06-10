@@ -21,6 +21,8 @@ __attribute__((noreturn)) void cmain(void) {
     fat_init(0, partition_lba);
     
     fat_list_dir(fat.root_start, fat.root_entries, 1);
+
+    *(uint32_t*)(KERN_LBA_ADDR) = partition_lba;
     
     FAT_file file;
     if (fat_find_file(KERNEL_NAME, &file)) {
@@ -31,7 +33,6 @@ __attribute__((noreturn)) void cmain(void) {
     fat_read_file(&file, (void*)0x10000, file.size); // load to 64KiB
 
     
-    bochs_breakpoint();
     load_elf64_from_buffer((uint8_t*)0x10000, file.size); // load the kernel from the buffer at 64KiB
 
 

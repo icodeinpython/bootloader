@@ -1,3 +1,4 @@
+[BITS 16]
 org 0x600
 
 _start:
@@ -15,7 +16,7 @@ _start:
     jmp 0:LowStart
 
 LowStart:
-    mov [bootDrive], dl
+    mov byte [bootDrive], dl
 
     ; disable cursor
     mov ah, 0x01
@@ -53,7 +54,7 @@ LowStart:
 welcome: db "Welcome to JackOS", 0x0d, 0x0a, 0
 
 diskTimeStamp: times 8 db 0
-bootDrive: db 0
+bootDrive equ 0x2008
 PToff: dw 0
 
 times (0x1b8 - ($-$$)) nop

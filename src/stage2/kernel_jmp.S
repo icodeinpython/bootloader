@@ -17,7 +17,6 @@ kernel_jmp:
     call init_paging
     call init_gdt 
 
-    xchg %bx, %bx
     pop %ecx
     movl $MAGIC, %eax
     movl boot_info, %ebx
@@ -53,83 +52,90 @@ test_long_mode:
 
 
 #define SIZEOF_PAGE_TABLE 4096
-#define PML4T_ADDR 0x5000
-#define PDPT_ADDR 0x2000
-#define PDT_ADDR 0x3000
-#define PT_ADDR 0x4000
-#define PT_ADDR_MASK 0xffffffffff000
-#define PT_PRESENT 1                 // marks the entry as in use
-#define PT_READABLE 2                // marks the entry as r/w
-#define ENTRIES_PER_PT 512
-#define SIZEOF_PT_ENTRY 8
-#define PAGE_SIZE 0x1000
-#define CR4_PAE_ENABLE 1 << 5
+#define PML4T_ADDR 0x3000        /* Shifted up slightly to give tables their own 4KB spaces cleanly */
+#define PDPT_ADDR  0x4000
+#define PDT_ADDR   0x5000
+/* We no longer need PT_ADDR (Level 1) because we are using 2MB Huge Pages! */
 
-#define PML4 (PDPT_ADDR & PT_ADDR_MASK | PT_PRESENT | PT_READABLE)
-#define PDPT (PDT_ADDR & PT_ADDR_MASK | PT_PRESENT | PT_READABLE)
-#define PDT (PT_ADDR & PT_ADDR_MASK | PT_PRESENT | PT_READABLE)
-#define PT (PT_PRESENT | PT_READABLE)
+#define PT_PRESENT   (1 << 0)
+#define PT_READABLE  (1 << 1)
+#define PT_HUGE_PAGE (1 << 7)    /* Bit 7 in PDT entry makes it a 2MB page */
 
-#define EFER_MSR 0xC0000080
+#define EFER_MSR       0xC0000080
 #define EFER_LM_ENABLE (1 << 8)
-#define CR0_PG_ENABLE (1 << 31)
-#define PHYS_BASE  0x00100000   // 1MB
-#define VIRT_BASE  0xFFFFFFFF80000000  // 64-bit Higher Half (or 0xC0000000 for 32-bit)
-#define ENTRIES_PER_TAB 512          // 9 bits of address per table level
-
-
+#define CR4_PAE_ENABLE (1 << 5)
+#define CR0_PG_ENABLE  (1 << 31)
 
 init_paging:
-    
-    mov $2000, %edi
+    /* ---------------------------------------------------------------------
+     * 1. Clear Page Table Memory Space (0x3000 to 0x5000)
+     * --------------------------------------------------------------------- */
+    mov $0x3000, %edi
     xor %eax, %eax
-    mov $(1024 * 4), %ecx                                    
+    mov $(1024 * 3), %ecx        /* Clearing 3 tables * 4096 bytes = 12288 bytes (3072 dwords) */
     cld
     rep stosl
 
+    /* Set CR3 to point to the PML4 table */
     mov $PML4T_ADDR, %edi
     mov %edi, %cr3
         
-    // PML4 Setup (Upper 32-bits are safely 0 due to the clear above)
-    movl $(PDPT_ADDR | PT), (%edi)                          // PML4[0]
-    movl $(PDPT_ADDR | PT), (511 * SIZEOF_PT_ENTRY)(%edi)   // PML4[511] = &PDPT[510]
+    /* ---------------------------------------------------------------------
+     * 2. PML4 Setup (Level 4)
+     * --------------------------------------------------------------------- */
+    /* Entry 0: Identity mapping (0x0000000000000000) */
+    movl $(PDPT_ADDR | PT_PRESENT | PT_READABLE), (%edi)
+    
+    /* Entry 256: Direct Map Window (0xFFFF800000000000) */
+    movl $(PDPT_ADDR | PT_PRESENT | PT_READABLE), (256 * 8)(%edi)
 
+    /* Entry 511: Kernel Executable Base (0xFFFFFFFF80000000) */
+    movl $(PDPT_ADDR | PT_PRESENT | PT_READABLE), (511 * 8)(%edi)
+
+    /* ---------------------------------------------------------------------
+     * 3. PDPT Setup (Level 3)
+     * --------------------------------------------------------------------- */
     mov $PDPT_ADDR, %edi
-    // PDPT Setup (Upper 32-bits are safely 0 due to the clear above)
-    movl $(PDT_ADDR | PT), (%edi)                           // PDPT[0]
-    movl $(PDT_ADDR | PT), (510 * SIZEOF_PT_ENTRY)(%edi)    // PDPT[510]
+    
+    /* Entry 0: Maps virtual 0G-512G (Covers Identity and Direct Map Entry 256) */
+    movl $(PDT_ADDR | PT_PRESENT | PT_READABLE), (%edi)                           
+    
+    /* Entry 510: Maps virtual 510G-511G (Covers Kernel Base Entry 511) */
+    movl $(PDT_ADDR | PT_PRESENT | PT_READABLE), (510 * 8)(%edi)
 
+    /* ---------------------------------------------------------------------
+     * 4. PDT Setup (Level 2) - Map 1 GiB of RAM using 512 x 2 MiB Huge Pages
+     * --------------------------------------------------------------------- */
     mov $PDT_ADDR, %edi
-    // PDT Setup (Upper 32-bits are safely 0 due to the clear above)
-    movl $(PT_ADDR | PT), (%edi)                            // PDT[0]
+    xor %eax, %eax               /* Physical address starts at 0x00000000 */
+    mov $512, %ecx               /* 512 entries * 2MB = 1024MB (1 GiB) */
 
-    mov $PT_ADDR, %edi                                       // Destination: first page table
-    xor %eax, %eax                                           // Physical frame base starts at 0x00000000
-    mov $ENTRIES_PER_PT, %ecx                                // Fill all 512 PT entries
-
-fill_pt:
-    mov %eax, %edx                                           // edx = current physical frame address
-    or $PT, %edx                                             // Add present + writable flags
+fill_pdt:
+    mov %eax, %edx
+    or $(PT_PRESENT | PT_READABLE | PT_HUGE_PAGE), %edx   /* Notice PT_HUGE_PAGE flag */
     
-    movl %edx, (%edi)                                        // Write PTE (low 32 bits)
-    movl $0, 4(%edi)                                         // Write PTE (high 32 bits = 0)
+    movl %edx, (%edi)            /* Write low 32 bits of PDT entry */
+    movl $0, 4(%edi)             /* Write high 32 bits (0 for first 4GB of RAM) */
     
-    add $PAGE_SIZE, %eax                                     // Next 4 KiB physical frame
-    add $SIZEOF_PT_ENTRY, %edi                               // Advance to next PT slot (8-byte entry)
-    loop fill_pt                                             // Repeat for 512 entries
+    add $0x200000, %eax          /* Move physical address forward by 2 MiB (0x200000) */
+    add $8, %edi                 /* Move to next PDT table slot */
+    loop fill_pdt
 
-    // Enable PAE
+    /* ---------------------------------------------------------------------
+     * 5. CPU Register Activation
+     * --------------------------------------------------------------------- */
+    /* Enable PAE */
     mov %cr4, %eax
     or $CR4_PAE_ENABLE, %eax
     mov %eax, %cr4
 
-    // Enable Long Mode
+    /* Enable Long Mode (EFER) */
     mov $EFER_MSR, %ecx
     rdmsr
     or $EFER_LM_ENABLE, %eax
     wrmsr
 
-    // Enable Paging
+    /* Enable Paging (CR0) */
     mov %cr0, %eax
     or $CR0_PG_ENABLE, %eax
     mov %eax, %cr0

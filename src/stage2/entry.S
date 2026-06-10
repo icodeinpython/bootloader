@@ -3,7 +3,6 @@
 .extern cmain
 .extern mmap_count
 entry:
-    xchg %bx, %bx
     movl %ebx, mmap_count
     mov $0x7c00, %esp
     call cmain

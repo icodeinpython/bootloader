@@ -1,12 +1,15 @@
 #ifndef BOOTLOADER_H
 #define BOOTLOADER_H
 
-typedef unsigned long long uint64_t;
-typedef unsigned int uint32_t;
-typedef unsigned short uint16_t;
-typedef unsigned char uint8_t;
+#include <system.h>
 
-#define MAGIC 0xB16B00B5
+#define MAGIC 0xB19B00B5
+#define VIDEO_INFO_ADDR 0x1000
+#define BOOTINFO_ADDR 0x1100
+#define MMAP_COUNT_ADDR 0x2000 // uint32_t
+#define MMAP_ENTRIES_ADDR 0x2010 // 16 byte aligned
+#define KERN_LBA_ADDR 0x2004 // uint32_t
+#define BOOT_DRIVE_ADDR 0x2008 // uint8_t
 
 
 // provided information: 
@@ -27,6 +30,8 @@ typedef struct {
     uint64_t length;
     uint32_t type;
     uint32_t acpi_ext;
+
+    uint8_t padding[8]; // pad to 32 bytes total
 } __attribute__((packed)) e820_entry_t;
 
 struct drive_info {

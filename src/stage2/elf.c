@@ -60,6 +60,8 @@ uint32_t load_elf64_from_buffer(const uint8_t *elf, uint32_t elf_size) {
         return -3;
     }
 
+    clearScreen();
+
     // Load the program headers
     const Elf64_Phdr *ph = (const Elf64_Phdr *)(elf + hdr->e_phoff);
     printf("ELF has %d program headers\n", hdr->e_phnum);
@@ -68,7 +70,7 @@ uint32_t load_elf64_from_buffer(const uint8_t *elf, uint32_t elf_size) {
         if (ph[i].p_type != PT_LOAD)
             continue;
 
-        uint8_t *dest = (uint8_t *)(uint32_t)ph[i].p_vaddr;
+        uint8_t *dest = (uint8_t *)(uint32_t)ph[i].p_paddr;
         const uint8_t *src = (uint8_t*)((uint32_t)elf + (uint32_t)ph[i].p_offset);
         if ((uint32_t)dest < begin) {
             begin = (uint32_t)dest;
@@ -77,7 +79,7 @@ uint32_t load_elf64_from_buffer(const uint8_t *elf, uint32_t elf_size) {
         // Copy from file to proper memory addr
         memcpy(dest, src, ph[i].p_filesz);
 
-        printf("Loaded %d bytes from 0x%x to 0x%x\n", ph[i].p_filesz, src, dest);
+        printf("Loaded %d bytes from file offset 0x%x to physical 0x%x\n", ph[i].p_filesz, ph[i].p_offset, dest);
 
         // Zero out extra memory if memsz > filesz
         memset(dest + ph[i].p_filesz, 0, ph[i].p_memsz - ph[i].p_filesz);
@@ -86,8 +88,6 @@ uint32_t load_elf64_from_buffer(const uint8_t *elf, uint32_t elf_size) {
 
     printf("Entry point: 0x%x\n", (uint32_t)hdr->e_entry); // gets ored with 0xFFFFFFFF in kernel_jmp.S to set the high bit for long mode kernel address space
 
-
-    boot_info->magic = MAGIC;
 
     // video
     memcpy(&boot_info->video, video_info, sizeof(struct videoInfo));
@@ -110,12 +110,13 @@ uint32_t load_elf64_from_buffer(const uint8_t *elf, uint32_t elf_size) {
             break;
     }
     // mmap
-    boot_info->mmap.mmap = (e820_entry_t*)0x2000;
-    boot_info->mmap.mmap_count = mmap_count;
+    boot_info->mmap.mmap = (e820_entry_t*)0x2010;
+    boot_info->mmap.mmap_count = *(uint32_t*)0x2000;
+    printf("Bootloader found %d memory map entries\n", boot_info->mmap.mmap_count);
+    boot_info->magic = MAGIC;
 
     // Jump to entry point
     entry_func_t entry = (entry_func_t)((uint32_t)hdr->e_entry);
-
     clearScreen();
 
 
