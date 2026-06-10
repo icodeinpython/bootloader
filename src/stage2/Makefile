@@ -1,5 +1,5 @@
 CC = i686-elf-gcc
-CFLAGS = -m32 -ffreestanding -nostdlib -fno-stack-protector -Wall -Wextra -pedantic -Werror -I include -Oz -Wno-unused
+CFLAGS = -m32 -ffreestanding -nostdlib -nostdinc -fno-stack-protector -Wall -Wextra -pedantic -Werror -I include -Oz -Wno-unused
 	
 LDFLAGS = -m32 -ffreestanding -nostdlib -fno-stack-protector -Wl,--build-id=none -Wl,--gc-sections -T linker.ld
 
@@ -9,7 +9,8 @@ OBJ = $(C_SRC:.c=.c.o) $(ASM_SRC:.S=.S.o)
 
 stage2.bin: $(OBJ)
 	$(CC) $(LDFLAGS) -o $@ $(OBJ)
-	truncate -s 31K stage2.bin
+	truncate -s 30K stage2.bin
+	cat lm_init.bin >> $@
 
 %.c.o: %.c
 	$(CC) $(CFLAGS) -c -o $@ $^

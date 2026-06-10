@@ -24,7 +24,7 @@ typedef struct {
   uint16_t     e_shentsize;    
   uint16_t     e_shnum;        
   uint16_t     e_shstrndx;     
-} Elf64_Ehdr;
+} __attribute__((packed)) Elf64_Ehdr;
 
 typedef struct
 {
@@ -36,7 +36,14 @@ typedef struct
   uint64_t   p_filesz;       
   uint64_t   p_memsz;        
   uint64_t   p_align;        
-} Elf64_Phdr;
+} __attribute__((packed)) Elf64_Phdr;
+
+static inline uint32_t to_phys(uint32_t virt) {
+    if (virt >= 0x80000000) {
+        return (uint32_t)(virt - 0x80000000);
+    }
+    return (uint32_t)virt;
+}
 
 // ---------------- ELF LOADER ----------------
 
@@ -62,32 +69,54 @@ uint32_t load_elf64_from_buffer(const uint8_t *elf, uint32_t elf_size) {
 
     clearScreen();
 
-    // Load the program headers
-    const Elf64_Phdr *ph = (const Elf64_Phdr *)(elf + hdr->e_phoff);
-    printf("ELF has %d program headers\n", hdr->e_phnum);
+    // Calculate exactly where the program headers start in bytes
+    const uint8_t *ph_start = elf + (uint32_t)hdr->e_phoff;
 
     for (int i = 0; i < hdr->e_phnum; i++) {
-        if (ph[i].p_type != PT_LOAD)
+        // Get a pointer directly to the current program header bytes
+        const uint8_t *curr_ph_bytes = ph_start + (i * hdr->e_phentsize);
+
+        // Read p_type (Offset 0, 4 bytes)
+        uint32_t p_type = *(const uint32_t *)(curr_ph_bytes + 0);
+
+        if (p_type != PT_LOAD)
             continue;
 
-        uint8_t *dest = (uint8_t *)(uint32_t)ph[i].p_paddr;
-        const uint8_t *src = (uint8_t*)((uint32_t)elf + (uint32_t)ph[i].p_offset);
+        // Read 64-bit p_offset (Offset 8, 8 bytes) and grab lower 32 bits
+        uint32_t p_offset_low = *(const uint32_t *)(curr_ph_bytes + 8);
+
+        // Read 64-bit p_vaddr (Offset 16, 8 bytes) and grab lower 32 bits
+        uint32_t p_vaddr_low = *(const uint32_t *)(curr_ph_bytes + 16);
+
+        // Read 64-bit p_filesz (Offset 32, 8 bytes) and grab lower 32 bits
+        uint32_t p_filesz_low = *(const uint32_t *)(curr_ph_bytes + 32);
+
+        // Read 64-bit p_memsz (Offset 40, 8 bytes) and grab lower 32 bits
+        uint32_t p_memsz_low = *(const uint32_t *)(curr_ph_bytes + 40);
+
+        // Perform your translation safely on the low 32 bits
+        // Since 0xFFFFFFFF80100000 low 32 bits is exactly 0x00100000, we don't even need subtraction!
+        uint8_t *dest = (uint8_t *)to_phys(p_vaddr_low); 
+        const uint8_t *src  = (const uint8_t *)((uint32_t)elf + p_offset_low);
+
         if ((uint32_t)dest < begin) {
             begin = (uint32_t)dest;
         }
 
         // Copy from file to proper memory addr
-        memcpy(dest, src, ph[i].p_filesz);
+        memcpy(dest, src, p_filesz_low);
 
-        printf("Loaded %d bytes from file offset 0x%x to physical 0x%x\n", ph[i].p_filesz, ph[i].p_offset, dest);
+        printf("Segment %d: Loaded %d bytes from 0x%x to 0x%x\n", i, p_filesz_low, src, dest);
 
         // Zero out extra memory if memsz > filesz
-        memset(dest + ph[i].p_filesz, 0, ph[i].p_memsz - ph[i].p_filesz);
+        if (p_memsz_low > p_filesz_low) {
+            memset(dest + p_filesz_low, 0, p_memsz_low - p_filesz_low);
+        }
     }
+    uint32_t phys_entry = to_phys(hdr->e_entry);
+    printf("Physical Entry point: 0x%x\n", phys_entry);
 
-
-    printf("Entry point: 0x%x\n", (uint32_t)hdr->e_entry); // gets ored with 0xFFFFFFFF in kernel_jmp.S to set the high bit for long mode kernel address space
-
+    boot_info->magic = MAGIC;
 
     // video
     memcpy(&boot_info->video, video_info, sizeof(struct videoInfo));
@@ -110,13 +139,12 @@ uint32_t load_elf64_from_buffer(const uint8_t *elf, uint32_t elf_size) {
             break;
     }
     // mmap
-    boot_info->mmap.mmap = (e820_entry_t*)0x2010;
-    boot_info->mmap.mmap_count = *(uint32_t*)0x2000;
-    printf("Bootloader found %d memory map entries\n", boot_info->mmap.mmap_count);
-    boot_info->magic = MAGIC;
+    boot_info->mmap.mmap = (e820_entry_t*)0x2000;
+    boot_info->mmap.mmap_count = mmap_count;
 
     // Jump to entry point
-    entry_func_t entry = (entry_func_t)((uint32_t)hdr->e_entry);
+    entry_func_t entry = (entry_func_t)((uint32_t)phys_entry);
+
     clearScreen();
 
 
